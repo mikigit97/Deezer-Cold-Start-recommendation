@@ -30,7 +30,7 @@ This approach improves upon the original baseline by ensuring that recommendatio
 
 - **`main.py`** – Main script to run the evaluation and generate recommendations.
 - **`clustering.py`** – Code for clustering warm user embeddings and generating per-cluster song probability lists.
-- **`evaluation_with_fuzzy.py`** – Evaluation script implementing our hard clustering-based soft allocation strategy.
+- **`evaluation_fuzzy_only_on_cold.py`** – Evaluation script implementing our hard clustering-based soft allocation strategy.
 - **`model.py`** – Contains the definition of the regression model used for predicting user embeddings.
 - **`options.py`** – Configuration file with hyperparameters and settings.
 
