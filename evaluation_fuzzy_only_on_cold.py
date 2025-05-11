@@ -5,6 +5,7 @@ import torch
 import torch.nn
 import pickle
 from model import RegressionTripleHidden
+# from model import EmbeddingRegressor128
 from options import config
 from sklearn.metrics import ndcg_score, dcg_score
 import statistics
@@ -79,8 +80,8 @@ def evaluation_with_fuzzy_on_cold(dataset_path, master_path, eval_type="full_per
     groundtruth_list_test = []
     for idx in range(testing_set_size):
         if eval_type in ["full_perso", "semi_perso", "popularity"]:
-            if idx % 100 == 0:
-                print(f"Loading test sample {idx}...")
+            # if idx % 100 == 0:
+            #     print(f"Loading test sample {idx}...")
             x = pickle.load(open(os.path.join(test_dir, f"x_{idx}.pkl"), "rb"))
             test_xs.append(x)
         elif eval_type in ["inputfeatures"]:
@@ -109,19 +110,32 @@ def evaluation_with_fuzzy_on_cold(dataset_path, master_path, eval_type="full_per
     # ---------------------------
     # 2. Load Song Embeddings and Hard-Clustering Model Info
     # ---------------------------
+    # Check if the evaluation type requires loading song embeddings
     if eval_type in ["full_perso", "semi_perso", "avgd0stream"]:
+        # Print the path of the song embeddings file being loaded
         print("--- Loading song embeddings from:", os.path.join(dataset_path, "song_embeddings.parquet"))
+        
+        # Load the song embeddings from a parquet file and fill any missing values with 0
         song_embeddings = pd.read_parquet(os.path.join(dataset_path, "song_embeddings.parquet"), engine='fastparquet').fillna(0)
+        
+        # Generate a list of feature column names based on the embedding version
         list_features = ["feature_" + str(i) for i in range(len(song_embeddings["features_" + embeddings_version][0]))]
+        
+        # Use the column numbers to separate the song_embedding values by column
         song_embeddings[list_features] = pd.DataFrame(song_embeddings["features_" + embeddings_version].tolist(), 
                                                        index=song_embeddings.index)
+        
+        # Convert the embedding features into a NumPy array
         song_embeddings_values = song_embeddings[list_features].values
+        
+        # Convert the NumPy array of embedding features into a PyTorch FloatTensor
         song_embeddings_values_ = torch.FloatTensor(song_embeddings_values.astype(np.float32))
         print(f"Loaded {len(song_embeddings_values_)} song embeddings.")
         
         if eval_type in ["full_perso", "semi_perso"]:
             print("--- Loading regression model from:", model_filename)
             regression_model = RegressionTripleHidden(input_dim=input_dim, output_dim=target_dim)
+            # regression_model = EmbeddingRegressor128()
             regression_model.load_state_dict(torch.load(model_filename))
             reg = regression_model.eval()
             if use_cuda:
@@ -134,8 +148,11 @@ def evaluation_with_fuzzy_on_cold(dataset_path, master_path, eval_type="full_per
             kmeans_model_path = os.path.join(master_path, clustering_path, clusters_filename)
             with open(kmeans_model_path, "rb") as f:
                 kmeans = pickle.load(f)
-            # Get centroids from KMeans
-            centers = kmeans.cluster_centers_
+                # support both sklearn.KMeans and your fuzzy dict
+            if "fuzzy" in kmeans_model_path:
+                centers = kmeans["cluster_centers_"]
+            else:
+                centers = kmeans.cluster_centers_
             if use_cuda:
                 centroid_ = torch.FloatTensor(centers).to(device=cuda)
             else:
@@ -351,8 +368,10 @@ def evaluation_with_fuzzy_on_cold(dataset_path, master_path, eval_type="full_per
     print("=== Evaluation Finished ===")
 
 
-def segment_pred(target_validation_estimated, centroid_, k=10, cuda_name=torch.device(0)):
-    use_cuda = config['use_cuda']
+def segment_pred(target_validation_estimated, centroid_, k=10, cuda_name=None):
+    use_cuda = config.get('use_cuda', False) and torch.cuda.is_available()
+    if cuda_name is None and use_cuda:
+        cuda_name = torch.device("cuda:0")
     n1, n2 = target_validation_estimated.size(0), centroid_.size(0)
     target_validation_norm_ = torch.sum(target_validation_estimated**2, dim=1)
     centroid_norm_ = torch.sum(centroid_**2, dim=1)
