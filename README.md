@@ -9,14 +9,15 @@ Below is a sample README text you can copy and paste into your repository’s RE
 
 ## Overview
 
-Music streaming services face a significant challenge when new users register with little or no interaction data—the cold start problem. Poor initial recommendations can adversely affect user experience and retention. The original paper, *"A Semi-Personalized System for User Cold Start Recommendation on Music Streaming Apps"*, addresses this issue by integrating cold users into an existing latent space using fuzzy clustering and a deep neural network.
+Music streaming services face a significant challenge when new users register with little or no interaction data—the cold start problem. Poor initial recommendations can adversely affect user experience and retention. The original paper, *"A Semi-Personalized System for User Cold Start Recommendation on Music Streaming Apps"*, addresses this issue by integrating cold users into an existing latent space using clustering and a deep neural network. 
+
+## The original method
+
+The original method, deployed at scale by Deezer, addresses the user cold start problem through a semi-personalized recommendation system that combines a deep neural network with user segmentation. It builds on two latent collaborative filtering models (UT-ALS and TT-SVD) trained on warm users to learn an embedding space of musical preferences. For cold users, demographic data and same-day interaction signals (e.g., streams, searches, onboarding choices) are aggregated into a fixed-size input vector and passed through a feedforward neural network trained to predict embedding vectors in the latent space. Instead of directly recommending nearest-neighbor tracks, the method assigns cold users to precomputed warm user clusters and recommends popular items within the nearest segment, thereby improving robustness to sparse interaction data. The system is fully integrated into production and supports real-time inference using ONNX models served via a Kubernetes-deployed Golang web service.
 
 ## Our Improvement
 
 In this repository, we extend and improve upon the original approach by leveraging a hard clustering technique (using KMeans) combined with a proximity-based soft allocation strategy. Our method involves:
-
-- **Hard Clustering of Warm Users:**  
-  We cluster the embeddings of warm users using KMeans. Each cluster represents a group of users with similar musical preferences, and we precompute the popularity (i.e., probability distribution) of songs within each cluster.
 
 - **Proximity-Based Soft Allocation for Cold Users:**  
   When a new cold user registers, we predict their embedding using a pre-trained regression model. We then determine the five closest clusters by computing the Euclidean distance between the predicted embedding and the cluster centroids. For these five clusters, we compute soft membership percentages using inverse-distance weighting so that the memberships sum to 100%.
