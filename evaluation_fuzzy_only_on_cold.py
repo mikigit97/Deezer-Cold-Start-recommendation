@@ -13,44 +13,7 @@ from sklearn.preprocessing import Normalizer
 import itertools
 import time
 
-# ---------------------------
-# Helper Functions for Hard Clustering-Based Fuzzy Recommendation
-# ---------------------------
-def compute_soft_membership(new_user_vector, centers, top_k=5, eps=1e-10):
-    """
-    Given a new user vector and hard cluster centers, compute a soft assignment
-    over the top_k closest clusters using inverse-distance weighting.
-    Returns:
-        membership: A vector of length (nb_clusters,) where only the top_k indices have nonzero values that sum to 1.
-    """
-    # Compute squared Euclidean distances between the user and all centers
-    diff = centers - new_user_vector
-    distances = np.linalg.norm(diff, axis=1)  # shape: (nb_clusters,)
-    # Get indices of the top_k closest clusters
-    topk_indices = np.argpartition(distances, top_k)[:top_k]
-    topk_distances = distances[topk_indices]
-    # Compute inverse-distance weights; add eps to avoid division by zero
-    inv_d = 1.0 / (topk_distances + eps)
-    membership_values = inv_d / np.sum(inv_d)
-    # Create full membership vector (length = nb_clusters) with zeros elsewhere
-    membership = np.zeros_like(distances, dtype=np.float32)
-    membership[topk_indices] = membership_values
-    return membership
 
-def allocate_songs(membership, total):
-    """
-    Allocate 'total' number of songs proportionally to the membership vector.
-    Returns an integer allocation per cluster that sums to total.
-    """
-    raw_allocation = membership * total
-    allocation = np.floor(raw_allocation).astype(int)
-    remainder = total - allocation.sum()
-    if remainder > 0:
-        fractional_parts = raw_allocation - allocation
-        indices = np.argsort(fractional_parts)[::-1]
-        for idx in indices[:remainder]:
-            allocation[idx] += 1
-    return allocation
 
 # ---------------------------
 # Main Evaluation Function with Hard-Clustering Based Fuzzy Recommendation for Cold Users
@@ -368,23 +331,6 @@ def evaluation_with_fuzzy_on_cold(dataset_path, master_path, eval_type="full_per
     print("=== Evaluation Finished ===")
 
 
-def segment_pred(target_validation_estimated, centroid_, k=10, cuda_name=None):
-    use_cuda = config.get('use_cuda', False) and torch.cuda.is_available()
-    if cuda_name is None and use_cuda:
-        cuda_name = torch.device("cuda:0")
-    n1, n2 = target_validation_estimated.size(0), centroid_.size(0)
-    target_validation_norm_ = torch.sum(target_validation_estimated**2, dim=1)
-    centroid_norm_ = torch.sum(centroid_**2, dim=1)
-    centroid_norm_expand = centroid_norm_.expand(n1, n2).t()
-    target_validation_norm_expand = target_validation_norm_.expand(n2, n1)
-    product_ = centroid_.mm(target_validation_estimated.t())
-    distance = -target_validation_norm_expand - centroid_norm_expand + 2 * product_
-    idx = torch.topk(distance, k=k, dim=0)[1].float()
-    if use_cuda:
-        results = (idx + torch.ones(k, target_validation_norm_.size(0)).to(device=cuda_name)).cpu().numpy()
-    else:
-        results = (idx + torch.ones(k, target_validation_norm_.size(0))).numpy()
-    return results
 
 
 def generate_for_popularity_evaluation(dataset_path, embeddings_version="svd"):
